@@ -1,0 +1,100 @@
+const express = require('express');
+const mongoose = require('mongoose');
+const app = express();
+
+const address = require('node-macaddress');
+
+const connectionString = 'mongodb+srv://dineshjangir:MnRFajz510jrMafr@cluster0.pb2lrun.mongodb.net/ORG';
+
+mongoose
+	.connect(connectionString, {
+		useNewUrlParser: true,
+		useUnifiedTopology: true
+	})
+	.then(() => console.log('connection established'))
+	.catch(err => console.log(err));
+
+const orgSchema = mongoose.Schema(
+	{
+		dinesh: {
+			_id: { type: String, required: true },
+			ID: { type: String },
+			Name: { type: String },
+			Position: { type: String },
+			Parent_ID: { type: String }
+		}
+	},
+	{ strict: false }
+);
+orgSchema.pre('find', () => {
+	console.log('first');
+});
+orgSchema.post('find', () => {
+	console.log('second');
+});
+const org = mongoose.model('orgs', orgSchema);
+
+let traverseData = (elm, data = []) => {
+	if (elm.Parent_ID) {
+		for (let index = 0; index < data.length; index++) {
+			let element = data[index];
+			if (data[index]._doc) {
+				element = data[index]._doc;
+			}
+
+			if (element.ID == elm.Parent_ID) {
+				if (element.children) {
+					element.children.push(elm);
+				} else {
+					element.children = [];
+					element.children.push(elm);
+				}
+			} else {
+				if (element.children && element.children.length) {
+					traverseData(elm, element.children);
+				}
+			}
+		}
+	}
+};
+
+const convertDataIntoJson = (data, parentId = null) => {
+	let newData = [];
+
+	for (let index = 0; index < data.length; index++) {
+		let element = data[index];
+		if (!element.Parent_ID || element.Parent_ID == 0) {
+			newData.push(element);
+		} else {
+			traverseData(element, newData);
+		}
+	}
+	return newData;
+};
+
+const handleRes = async (req, res) => {
+	console.log('middle');
+	let data = await org.find({});
+	console.log('laast');
+
+	data = convertDataIntoJson(data);
+
+	return res.json(data);
+};
+
+app.get('/', (req, res) => {
+	address.one(function (err, addr) {
+		res.send(addr);
+	});
+
+	res.send('failed');
+});
+
+app.get('/tree', (req, res) => {
+	handleRes(req, res);
+});
+
+const port = 4500;
+app.listen(port, () => {
+	console.log(`Server is running on port ${port}`);
+});
